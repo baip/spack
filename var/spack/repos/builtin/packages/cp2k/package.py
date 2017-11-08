@@ -95,16 +95,16 @@ class Cp2k(Package):
             # Optimization flags
             optflags = {
                 'gcc': [
-                    '-O2',
-                    '-mtune=native',
+                    '-O3',
                     '-funroll-loops',
                     '-ffast-math',
                     '-ftree-vectorize',
                 ], 'intel': [
-                    '-O2',
+                    '-O3',
                     '-ip',
                     '-pc64',
                     '-unroll',
+                    '-fp-model fast=2',
                 ]
             }
 
@@ -134,10 +134,7 @@ class Cp2k(Package):
                     '-D__USE_CP2K_TRACE',
                     '-D__MKL'
                 ])
-                cflags.append('-fp-model precise')
-                cxxflags.append('-fp-model precise')
                 fcflags.extend([
-                    '-fp-model source',
                     '-heap-arrays 64',
                     '-diag-disable 8290,8291,10010,10212,11060',
                     '-free',
