@@ -47,6 +47,13 @@ class Libint(AutotoolsPackage):
     depends_on('boost', when='@2:')
     depends_on('gmp', when='@2:')
 
+    @property
+    def libs(self):
+        shared = False if 'static' in self.spec.last_query.extra_parameters else True
+        libraries = ['libderiv', 'libint', 'libr12']
+        return find_libraries(libraries, root=self.prefix.lib,
+                              shared=shared, recurse=True)
+
     def url_for_version(self, version):
         base_url = "https://github.com/evaleev/libint/archive"
         if version == Version('1.0.0'):
