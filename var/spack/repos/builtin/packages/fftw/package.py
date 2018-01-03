@@ -73,7 +73,9 @@ class Fftw(AutotoolsPackage):
 
     @property
     def libs(self):
-        result = find_libraries(['libfftw3'], root=self.prefix, recurse=True)
+        shared = False if 'static' in self.spec.last_query.extra_parameters else True
+        result = find_libraries(['libfftw3'], root=self.prefix,
+                                shared=shared, recurse=True)
         return result
 
     def autoreconf(self, spec, prefix):
