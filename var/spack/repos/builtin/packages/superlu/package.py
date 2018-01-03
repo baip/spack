@@ -44,6 +44,11 @@ class Superlu(Package):
     depends_on('cmake', when='@5.2.1:', type='build')
     depends_on('blas')
 
+    @property
+    def libs(self):
+        return find_libraries(['libsuperlu_dist'], root=self.prefix.lib,
+                              shared=False, recurse=True)
+
     # CMake installation method
     def install(self, spec, prefix):
         cmake_args = [
