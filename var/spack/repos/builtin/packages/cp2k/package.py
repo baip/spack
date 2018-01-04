@@ -104,101 +104,73 @@ class Cp2k(Package):
                     '-ftree-vectorize',
                 ], 'intel': [
                     '-O2',
+                    '-ip',
                     '-pc64',
                     '-unroll',
                 ]
             }
 
-            dflags = ['-DNDEBUG']
-
-            libxc = spec[self.with_static('libxc:fortran')]
-            fftw = spec[self.with_static('fftw')]
-
-            cppflags = [
+            dflags = [
+                '-DNDEBUG',
                 '-D__FFTW3',
                 '-D__LIBINT',
                 '-D__LIBINT_MAX_AM=6',
                 '-D__LIBDERIV_MAX_AM1=5',
                 '-D__LIBXC',
-                fftw.headers.cpp_flags,
-                libxc.headers.cpp_flags
             ]
 
-            if '^mpi@3:' in spec:
-                cppflags.append('-D__MPI_VERSION=3')
-            elif '^mpi@2:' in spec:
-                cppflags.append('-D__MPI_VERSION=2')
-
             if '^intel-mkl' in spec:
-                cppflags.append('-D__FFTSG')
+                dflags.append('-D__FFTSG')
+
+            cppflags = []
 
             cflags = copy.deepcopy(optflags[self.spec.compiler.name])
             cxxflags = copy.deepcopy(optflags[self.spec.compiler.name])
             fcflags = copy.deepcopy(optflags[self.spec.compiler.name])
 
             if '%intel' in spec:
-                cflags.append('-fp-model precise')
-                cxxflags.append('-fp-model precise')
-                fcflags.extend(['-fp-model source', '-heap-arrays 64'])
-            elif '%gcc' in spec:
-                fcflags.extend(['-ffree-form', '-ffree-line-length-none'])
-
-            libxc = libxc.libs
-            fftw = fftw.libs
-            ldflags = [fftw.search_flags]
-
-            if 'superlu-dist@4.3' in spec:
-                ldflags = ['-Wl,--allow-multiple-definition'] + ldflags
-
-            libs = spec[self.with_static('libint')].libs
-
-            if '+plumed' in self.spec:
-                plumed = spec['plumed']
-                # Include Plumed.inc in the Makefile
-                mkf.write('include {0}\n'.format(
-                    join_path(plumed.prefix.lib,
-                              'plumed',
-                              'src',
-                              'lib',
-                              'Plumed.inc')
-                ))
-                # Add required macro
-                dflags.extend(['-D__PLUMED2'])
-                cppflags.extend(['-D__PLUMED2'])
-                libs += plumed.libs
-
-            mkf.write('CC = {0.compiler.cc}\n'.format(self))
-            if '%intel' in self.spec:
-                # CPP is a commented command in Intel arch of CP2K
-                # This is the hack through which cp2k developers avoid doing :
-                #
-                # ${CPP} <file>.F > <file>.f90
-                #
-                # and use `-fpp` instead
-                mkf.write('CPP = # {0.compiler.cc} -P\n\n'.format(self))
-                mkf.write('AR = xiar -r\n\n')
-            else:
-                mkf.write('CPP = # {0.compiler.cc} -E\n\n'.format(self))
-                mkf.write('AR = ar -r\n\n')
-            fc = self.compiler.fc if '~mpi' in spec else self.spec['mpi'].mpifc
-            mkf.write('FC = {0}\n'.format(fc))
-            mkf.write('LD = {0}\n'.format(fc))
-            # Intel
-            if '%intel' in self.spec:
-                cppflags.extend([
+                dflags.extend([
                     '-D__INTEL',
                     '-D__HAS_ISO_C_BINDING',
                     '-D__USE_CP2K_TRACE',
                     '-D__MKL'
                 ])
+                cflags.append('-fp-model precise')
+                cxxflags.append('-fp-model precise')
                 fcflags.extend([
+                    '-fp-model source',
+                    '-heap-arrays 64',
                     '-diag-disable 8290,8291,10010,10212,11060',
                     '-free',
                     '-fpp'
                 ])
+            elif '%gcc' in spec:
+                fcflags.extend(['-ffree-form', '-ffree-line-length-none'])
+
+            fftw = spec[self.with_static('fftw')]
+            libxc = spec[self.with_static('libxc:fortran')]
+
+            fcflags.extend([fftw.headers.cpp_flags, libxc.headers.cpp_flags])
+
+            fftw = fftw.libs
+            libxc = libxc.libs
+
+            # LAPACK / BLAS
+            lapack = spec[self.with_static('lapack')].libs
+            blas = spec[self.with_static('blas')].libs
+
+            ldflags = [(fftw + lapack + blas + libxc).search_flags]
+
+            libs = spec[self.with_static('libint')].libs
+
             # MPI
             if '+mpi' in self.spec:
-                cppflags.extend([
+                if '^mpi@3:' in spec:
+                    dflags.append('-D__MPI_VERSION=3')
+                elif '^mpi@2:' in spec:
+                    dflags.append('-D__MPI_VERSION=2')
+
+                dflags.extend([
                     '-D__parallel',
                     '-D__LIBPEXSI',
                     '-D__SCALAPACK'
@@ -207,22 +179,20 @@ class Cp2k(Package):
                 elpa = spec[self.with_static('elpa')]
                 if spec.satisfies('@:4.999'):
                     if elpa.satisfies('@:2014.5.999'):
-                        cppflags.append('-D__ELPA')
+                        dflags.append('-D__ELPA')
                     elif elpa.satisfies('@2014.6:2015.10.999'):
-                        cppflags.append('-D__ELPA2')
+                        dflags.append('-D__ELPA2')
                     else:
-                        cppflags.append('-D__ELPA3')
+                        dflags.append('-D__ELPA3')
                 else:
-                    cppflags.append('-D__ELPA={0}{1:02d}'.format(
+                    dflags.append('-D__ELPA={0}{1:02d}'.format(
                         elpa.version[0], int(elpa.version[1])))
                     fcflags.append('-I' + join_path(
                         elpa.prefix, 'include',
                         'elpa-{0}'.format(str(elpa.version)), 'elpa'
                     ))
 
-                if 'wannier90' in spec:
-                    cppflags.append('-D__WANNIER90')
-
+                pexsi = spec['pexsi']
                 fcflags.extend([
                     # spec['elpa:fortran'].headers.cpp_flags
                     '-I' + join_path(
@@ -232,35 +202,32 @@ class Cp2k(Package):
                         'modules'
                     ),
                     # spec[pexsi:fortran].headers.cpp_flags
-                    '-I' + join_path(spec['pexsi'].prefix, 'fortran')
+                    '-I' + join_path(pexsi.prefix, 'fortran')
                 ])
+
                 scalapack = spec[self.with_static('scalapack')].libs
                 ldflags.append(scalapack.search_flags)
+
                 libs += (
                     elpa.libs +
-                    spec['pexsi'].libs +
+                    pexsi.libs +
                     spec['superlu-dist'].libs +
                     spec['parmetis'].libs +
-                    spec['metis'].libs
+                    spec['metis'].libs +
+                    scalapack +
+                    self.spec[self.with_static('mpi:cxx')].libs +
+                    self.compiler.stdcxx_libs
                 )
 
+                if 'superlu-dist@4.3' in spec:
+                    ldflags = ['-Wl,--allow-multiple-definition'] + ldflags
+
                 if 'wannier90' in spec:
+                    dflags.append('-D__WANNIER90')
                     wannier = join_path(
                         spec['wannier90'].prefix.lib, 'libwannier.a'
                     )
                     libs += LibraryList(wannier)
-
-                libs += (scalapack +
-                         self.spec[self.with_static('mpi:cxx')].libs +
-                         self.compiler.stdcxx_libs)
-            # LAPACK / BLAS
-            lapack = spec[self.with_static('lapack')].libs
-            blas = spec[self.with_static('blas')].libs
-            ldflags.append((lapack + blas).search_flags)
-
-            ldflags.append(libxc.search_flags)
-
-            libs += (fftw + lapack + blas + libxc)
 
             if 'smm=libsmm' in spec:
                 try:
@@ -271,21 +238,54 @@ class Cp2k(Package):
                 if not os.path.isfile(libsmm_path):
                     raise IOError('The file LIBSMM_PATH pointed to does not '
                                   'exist. Note that it must be absolute path.')
-                cppflags.extend([
+                dflags.extend([
                     '-D__HAS_smm_dnn',
                     '-D__HAS_smm_vec',
                 ])
                 libs += LibraryList(libsmm_path)
             elif 'smm=libxsmm' in spec:
-                cppflags.extend([
-                    '-D__LIBXSMM',
-                    spec['libxsmm'].headers.cpp_flags,
-                ])
+                dflags.append('-D__LIBXSMM')
+                fcflags.append(spec['libxsmm'].headers.cpp_flags)
                 libxsmm = spec['libxsmm'].libs
                 ldflags.append(libxsmm.search_flags)
                 libs += libxsmm
 
-            dflags.extend(cppflags)
+            if '+plumed' in self.spec:
+                plumed = spec['plumed']
+                # Include Plumed.inc in the Makefile
+                mkf.write('include {0}\n\n'.format(
+                    join_path(plumed.prefix.lib,
+                              'plumed',
+                              'src',
+                              'lib',
+                              'Plumed.inc')
+                ))
+                # Add required macro
+                dflags.append('-D__PLUMED2')
+                libs += plumed.libs
+
+            libs += (libxc + fftw + lapack + blas)
+
+            mkf.write('CC = {0.compiler.cc}\n'.format(self))
+
+            if '%intel' in self.spec:
+                # CPP is a commented command in Intel arch of CP2K
+                # This is the hack through which cp2k developers avoid doing :
+                #
+                # ${CPP} <file>.F > <file>.f90
+                #
+                # and use `-fpp` instead
+                mkf.write('CPP = # {0.compiler.cc} -P\n'.format(self))
+                mkf.write('AR = xiar -r\n')
+            else:
+                mkf.write('CPP = # {0.compiler.cc} -E\n'.format(self))
+                mkf.write('AR = ar -r\n')
+
+            fc = self.compiler.fc if '~mpi' in spec else self.spec['mpi'].mpifc
+            mkf.write('FC = {0}\n'.format(fc))
+            mkf.write('LD = {0}\n\n'.format(fc))
+
+            cppflags.extend(dflags)
             cflags.extend(cppflags)
             cxxflags.extend(cppflags)
             fcflags.extend(cppflags)
