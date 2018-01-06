@@ -109,6 +109,7 @@ class Cp2k(Package):
             }
 
             dflags = [
+                '-D__DATA_DIR=' + self.prefix.data,
                 '-DNDEBUG',
                 '-D__FFTW3',
                 '-D__LIBINT',
@@ -311,3 +312,4 @@ class Cp2k(Package):
             env['PWD'] = pwd_backup
         exe_dir = join_path('exe', cp2k_architecture)
         shutil.copytree(exe_dir, self.prefix.bin)
+        shutil.copytree('data', self.prefix.data)
