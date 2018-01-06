@@ -75,8 +75,6 @@ class Cp2k(Package):
 
     # TODO : add dependency on CUDA
 
-    parallel = False
-
     def with_static(self, query):
         if '~static' in self.spec:
             return query
